@@ -1,13 +1,13 @@
 #include <iostream>
 #include <string>
 #include <thread>
-#include <vector>
+#include <list>
 #include <mutex>
 #include <cstring>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <algorithm>  // For std::remove_if and std::for_each
+#include <algorithm> 
 
 const int PORT = 8080;
 const int MAX_CLIENTS = 10;
@@ -18,7 +18,7 @@ struct ClientInfo {
     std::string username;
 };
 
-std::vector<ClientInfo> clients;
+std::list<ClientInfo> clients;  // Use list instead of vector
 
 void broadcastMessage(const std::string& message, int senderSocket) {
     std::lock_guard<std::mutex> lock(clientListMutex);
@@ -60,9 +60,7 @@ void handleClient(int clientSocket) {
 
     {
         std::lock_guard<std::mutex> lock(clientListMutex);
-        clients.erase(std::remove_if(clients.begin(), clients.end(), 
-                                     [clientSocket](const ClientInfo& ci) { return ci.socket == clientSocket; }),
-                       clients.end());
+        clients.remove_if([clientSocket](const ClientInfo& ci) { return ci.socket == clientSocket; });
     }
 
     close(clientSocket);
