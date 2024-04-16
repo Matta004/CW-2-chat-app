@@ -15,6 +15,9 @@ const std::string RED_TEXT = "\033[31m";   // Receiver messages in red
 const std::string GREEN_TEXT = "\033[32m"; // Sender messages in green
 const std::string RESET_COLOR = "\033[0m"; // Reset to default terminal color
 
+// Global variable for last typing time
+std::chrono::time_point<std::chrono::system_clock> last_typing_time;
+
 void printTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
@@ -26,8 +29,13 @@ void receiveMessages(int sock) {
     while (true) {
         int valread = read(sock, buffer, 1024);
         if (valread > 0) {
-            printTimestamp();
-            std::cout << RED_TEXT << std::string(buffer, valread) << RESET_COLOR << std::endl;
+            std::string receivedMsg(buffer, valread);
+            if (receivedMsg.find("status_update:") == 0) {
+                std::cout << RED_TEXT << receivedMsg.substr(14) << RESET_COLOR << std::endl;
+            } else {
+                printTimestamp();
+                std::cout << RED_TEXT << receivedMsg << RESET_COLOR << std::endl;
+            }
             memset(buffer, 0, 1024);
         } else {
             std::cerr << RED_TEXT << "Server disconnected or error occurred" << RESET_COLOR << std::endl;
@@ -65,10 +73,19 @@ int main() {
     receiverThread.detach();
 
     std::string message;
-    std::getline(std::cin, message);
+    std::getline(std::cin, message);  // User types their username first
     send(sock, message.c_str(), message.length(), 0);
 
+    last_typing_time = std::chrono::system_clock::now();  // Initialize last typing time
+
     while (std::getline(std::cin, message)) {
+        auto now = std::chrono::system_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_typing_time).count() > 5) { // If last typing was more than 5 seconds ago
+            std::string typing_msg = "typing...";
+            send(sock, typing_msg.c_str(), typing_msg.length(), 0);
+        }
+        last_typing_time = now;
+
         if (message == "quit") {
             send(sock, "has left the chat.", 18, 0);
             break;
