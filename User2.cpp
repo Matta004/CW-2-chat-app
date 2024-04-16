@@ -15,9 +15,6 @@ const std::string RED_TEXT = "\033[31m";   // Receiver messages in red
 const std::string GREEN_TEXT = "\033[32m"; // Sender messages in green
 const std::string RESET_COLOR = "\033[0m"; // Reset to default terminal color
 
-// Global variable for last typing time
-std::chrono::time_point<std::chrono::system_clock> last_typing_time;
-
 void printTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
@@ -56,7 +53,9 @@ int main() {
     sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
-    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+
+    // Update the IP address to the correct server address, e.g., the private or public IP address based on network setup.
+    if (inet_pton(AF_INET, "192.168.1.38", &serv_addr.sin_addr) <= 0) {
         std::cerr << RED_TEXT << "Invalid address / Address not supported" << RESET_COLOR << std::endl;
         close(sock);
         return -1;
@@ -76,16 +75,7 @@ int main() {
     std::getline(std::cin, message);  // User types their username first
     send(sock, message.c_str(), message.length(), 0);
 
-    last_typing_time = std::chrono::system_clock::now();  // Initialize last typing time
-
     while (std::getline(std::cin, message)) {
-        auto now = std::chrono::system_clock::now();
-        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_typing_time).count() > 5) { // If last typing was more than 5 seconds ago
-            std::string typing_msg = "typing...";
-            send(sock, typing_msg.c_str(), typing_msg.length(), 0);
-        }
-        last_typing_time = now;
-
         if (message == "quit") {
             send(sock, "has left the chat.", 18, 0);
             break;
