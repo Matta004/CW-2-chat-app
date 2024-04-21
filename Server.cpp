@@ -28,6 +28,13 @@ void broadcastMessage(const std::string& message, SOCKET senderSocket) {
     }
 }
 
+void removeClient(SOCKET clientSocket) {
+    std::lock_guard<std::mutex> lock(clientListMutex);
+    clients.remove_if([clientSocket](const ClientInfo& client) {
+        return client.socket == clientSocket;
+    });
+}
+
 void handleClient(SOCKET clientSocket) {
     char buffer[1024] = {0};
     int valread = recv(clientSocket, buffer, 1024, 0);
@@ -38,20 +45,25 @@ void handleClient(SOCKET clientSocket) {
     }
     std::string username = std::string(buffer, valread);
 
+    // Add client to list
+    clients.push_back({clientSocket, username});
+
     std::string welcomeMessage = username + " has joined the chat\n";
-    broadcastMessage(welcomeMessage, clientSocket); // Notify others that a new client has joined
+    broadcastMessage(welcomeMessage, clientSocket);
     std::cout << "New client connected: " << username << std::endl;
 
-    while((valread = recv(clientSocket, buffer, 1024, 0)) > 0) {
+    while ((valread = recv(clientSocket, buffer, 1024, 0)) > 0) {
         std::string message = username + ": " + std::string(buffer, valread) + "\n";
         std::cout << message;
-        broadcastMessage(message, clientSocket); // Send received message to all clients except the sender
+        broadcastMessage(message, clientSocket);
     }
 
     std::string disconnectMessage = username + " has left the chat\n";
-    broadcastMessage(disconnectMessage, clientSocket); // Notify others that a client has disconnected
+    broadcastMessage(disconnectMessage, clientSocket);
     std::cout << "Client disconnected: " << username << std::endl;
 
+    // Remove client from list
+    removeClient(clientSocket);
     closesocket(clientSocket);
 }
 
@@ -72,7 +84,7 @@ int main() {
 
     sockaddr_in address;
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY; // Bind to any address
+    address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(PORT);
 
     if (bind(serverSocket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR) {
