@@ -1,5 +1,5 @@
 # Chat Application Documentation
-!["App Logo"](Matta004/CW-2-chat-app/image1)
+!["App Logo"](image2)
 
 ## Overview
 
