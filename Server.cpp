@@ -32,11 +32,11 @@ void removeClient(SOCKET clientSocket) {
     std::lock_guard<std::mutex> lock(clientListMutex);
     clients.remove_if([clientSocket](const ClientInfo& client) {
         return client.socket == clientSocket;
-    });
+        });
 }
 
 void handleClient(SOCKET clientSocket) {
-    char buffer[1024] = {0};
+    char buffer[1024] = { 0 };
     int valread = recv(clientSocket, buffer, 1024, 0);
     if (valread <= 0) {
         std::cerr << "Failed to read from client or client disconnected" << std::endl;
@@ -46,9 +46,9 @@ void handleClient(SOCKET clientSocket) {
     std::string username = std::string(buffer, valread);
 
     // Add client to list
-    clients.push_back({clientSocket, username});
+    clients.push_back({ clientSocket, username });
 
-    std::string welcomeMessage = username + " has joined the chat\n";
+    std::string welcomeMessage = username + " kdv mrlqhg wkh fkdw\n";
     broadcastMessage(welcomeMessage, clientSocket);
     std::cout << "New client connected: " << username << std::endl;
 
@@ -58,7 +58,7 @@ void handleClient(SOCKET clientSocket) {
         broadcastMessage(message, clientSocket);
     }
 
-    std::string disconnectMessage = username + " has left the chat\n";
+    std::string disconnectMessage = username + " kdv ohiw wkh fkdw\n";
     broadcastMessage(disconnectMessage, clientSocket);
     std::cout << "Client disconnected: " << username << std::endl;
 
@@ -69,7 +69,7 @@ void handleClient(SOCKET clientSocket) {
 
 int main() {
     WSADATA wsaData;
-    int result = WSAStartup(MAKEWORD(2,2), &wsaData);
+    int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != 0) {
         std::cerr << "WSAStartup failed: " << result << std::endl;
         return -1;
