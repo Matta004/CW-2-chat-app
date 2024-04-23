@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <fstream>
 #include <thread>
 #include <cstring>
 #include <sys/socket.h>
@@ -8,6 +9,7 @@
 #include <chrono>
 #include <iomanip>
 #include <cctype>
+#include <unordered_map>
 
 const int PORT = 8080;
 
@@ -22,42 +24,97 @@ void printTimestamp() {
     std::cout << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %X") << " ";
 }
 
-// Caesar Cipher Encryption that includes numbers and special characters
 std::string caesarEncrypt(const std::string& text, int shift) {
     std::string encryptedText = text;
     for (char &c : encryptedText) {
-        if (c >= 32 && c <= 126) { // Only encrypt printable characters
+        // Skip encrypting space and colon
+        if (c == ' ' || c == ':') {
+            continue;
+        }
+        if (c >= 32 && c <= 126) {
             c = static_cast<char>(((c - 32 + shift) % 95) + 32);
         }
     }
     return encryptedText;
 }
 
-// Caesar Cipher Decryption that includes numbers and special characters
 std::string caesarDecrypt(const std::string& text, int shift) {
     std::string decryptedText = text;
     for (char &c : decryptedText) {
-        if (c >= 32 && c <= 126) { // Only decrypt printable characters
+        // Skip decrypting space and colon
+        if (c == ' ' || c == ':') {
+            continue;
+        }
+        if (c >= 32 && c <= 126) {
             c = static_cast<char>(((c - 32 - shift + 95) % 95) + 32);
         }
     }
     return decryptedText;
 }
 
+bool loadCredentials(std::unordered_map<std::string, std::string>& credentials) {
+    std::ifstream file("credentials.txt");
+    if (!file.is_open()) {
+        return false;
+    }
+    std::string username, password;
+    while (file >> username >> password) {
+        credentials[username] = password;
+    }
+    file.close();
+    return true;
+}
+
+bool saveCredentials(const std::string& username, const std::string& password) {
+    std::ofstream file("credentials.txt", std::ios::app);
+    if (!file.is_open()) {
+        return false;
+    }
+    file << username << " " << password << std::endl;
+    file.close();
+    return true;
+}
+
+bool registerUser(std::unordered_map<std::string, std::string>& credentials) {
+    std::string username, password;
+    std::cout << "Enter new username: ";
+    std::getline(std::cin, username);
+    if (credentials.find(username) != credentials.end()) {
+        std::cout << "Username already exists. Try another." << std::endl;
+        return false;
+    }
+    std::cout << "Enter password: ";
+    std::getline(std::cin, password);
+
+    credentials[username] = caesarEncrypt(password, 3); // Encrypt password before saving
+    return saveCredentials(username, caesarEncrypt(password, 3));
+}
+
+bool loginUser(const std::unordered_map<std::string, std::string>& credentials, std::string& username) {
+    std::cout << "Enter username: ";
+    std::getline(std::cin, username);
+    std::string password;
+    std::cout << "Enter password: ";
+    std::getline(std::cin, password);
+
+    auto it = credentials.find(username);
+    if (it != credentials.end() && caesarDecrypt(it->second, 3) == password) {
+        return true;
+    }
+    std::cout << "Invalid credentials. Please try again." << std::endl;
+    return false;
+}
+
 void receiveMessages(int sock) {
     char buffer[1024] = {0};
     const int shift = 3; // Example shift for Caesar cipher
     while (true) {
+        memset(buffer, 0, 1024); // Clear buffer at the beginning of the loop
         int valread = read(sock, buffer, 1024);
         if (valread > 0) {
             std::string receivedMsg = caesarDecrypt(std::string(buffer, valread), shift);
-            if (receivedMsg.find("status_update:") == 0) {
-                std::cout << RED_TEXT << receivedMsg.substr(14) << RESET_COLOR << std::endl;
-            } else {
-                printTimestamp();
-                std::cout << RED_TEXT << receivedMsg << RESET_COLOR << std::endl;
-            }
-            memset(buffer, 0, 1024);
+            printTimestamp();
+            std::cout << RED_TEXT << receivedMsg << RESET_COLOR << std::endl;
         } else {
             std::cerr << RED_TEXT << "Server disconnected or error occurred" << RESET_COLOR << std::endl;
             close(sock);
@@ -67,6 +124,40 @@ void receiveMessages(int sock) {
 }
 
 int main() {
+    std::unordered_map<std::string, std::string> credentials;
+    if (!loadCredentials(credentials)) {
+        std::cout << "Could not load credentials file. New file will be created upon registration." << std::endl;
+    }
+
+    std::cout << "Do you want to (1) Register or (2) Login? Enter choice: ";
+    std::string choice, username;
+    std::getline(std::cin, choice);
+
+    bool isAuthenticated = false;
+    if (choice == "1") {
+        isAuthenticated = registerUser(credentials);
+        if (isAuthenticated) {
+            // Assuming that the username is set within registerUser function or another way to retrieve it here
+            std::cout << "Please login using your new credentials." << std::endl;
+            isAuthenticated = loginUser(credentials, username);  // Modified to pass username
+            if (isAuthenticated) {
+                std::cout << "Login successful." << std::endl;
+            } else {
+                std::cout << "Login failed." << std::endl;
+                return -1;
+            }
+        }
+    } else if (choice == "2") {
+        isAuthenticated = loginUser(credentials, username);  // Corrected to include the username parameter
+    } else {
+        std::cout << "Invalid choice. Exiting program." << std::endl;
+        return -1;
+    }
+
+    if (!isAuthenticated) {
+        return -1;
+    }
+
     std::cout << "Attempting to connect to the server..." << std::endl;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -78,7 +169,7 @@ int main() {
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
 
-    if (inet_pton(AF_INET, "192.168.176.153", &serv_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, "192.168.1.38", &serv_addr.sin_addr) <= 0) {
         std::cerr << RED_TEXT << "Invalid address / Address not supported" << RESET_COLOR << std::endl;
         close(sock);
         return -1;
@@ -90,14 +181,13 @@ int main() {
         return -1;
     }
 
-    std::cout << GREEN_TEXT << "Connected successfully. Please enter your username:" << RESET_COLOR << std::endl;
+    std::cout << GREEN_TEXT << "Connected successfully. Welcome, " << username << RESET_COLOR << std::endl;
     std::thread receiverThread(receiveMessages, sock);
     receiverThread.detach();
 
     const int shift = 3; // Example shift for Caesar cipher
     std::string message;
-    std::getline(std::cin, message);  // User types their username first
-    send(sock, caesarEncrypt(message, shift).c_str(), message.length(), 0);
+    send(sock, caesarEncrypt(username, shift).c_str(), username.length(), 0);
 
     while (std::getline(std::cin, message)) {
         if (message == "quit") {

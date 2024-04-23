@@ -3,6 +3,8 @@
 #include <thread>
 #include <list>
 #include <mutex>
+#include <atomic>
+#include <csignal>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -11,6 +13,7 @@
 const int PORT = 8080;
 const int MAX_CLIENTS = 10;
 std::mutex clientListMutex;
+std::atomic<bool> running(true);
 
 struct ClientInfo {
     SOCKET socket;
@@ -21,9 +24,20 @@ std::list<ClientInfo> clients;
 
 void broadcastMessage(const std::string& message, SOCKET senderSocket) {
     std::lock_guard<std::mutex> lock(clientListMutex);
-    for (const auto& client : clients) {
-        if (client.socket != senderSocket) {
-            send(client.socket, message.c_str(), message.length(), 0);
+    for (auto it = clients.begin(); it != clients.end(); ) {
+        if (it->socket != senderSocket) {
+            int sendResult = send(it->socket, message.c_str(), message.length(), 0);
+            if (sendResult == SOCKET_ERROR) {
+                std::cerr << "Failed to send message to " << it->username << std::endl;
+                closesocket(it->socket);
+                it = clients.erase(it);  // Remove client from the list if send fails
+            }
+            else {
+                ++it;
+            }
+        }
+        else {
+            ++it;
         }
     }
 }
@@ -44,15 +58,12 @@ void handleClient(SOCKET clientSocket) {
         return;
     }
     std::string username = std::string(buffer, valread);
-
-    // Add client to list
     clients.push_back({ clientSocket, username });
-
     std::string welcomeMessage = username + " kdv mrlqhg wkh fkdw\n";
     broadcastMessage(welcomeMessage, clientSocket);
     std::cout << "New client connected: " << username << std::endl;
 
-    while ((valread = recv(clientSocket, buffer, 1024, 0)) > 0) {
+    while ((valread = recv(clientSocket, buffer, 1024, 0)) > 0 && running) {
         std::string message = username + ": " + std::string(buffer, valread) + "\n";
         std::cout << message;
         broadcastMessage(message, clientSocket);
@@ -62,12 +73,18 @@ void handleClient(SOCKET clientSocket) {
     broadcastMessage(disconnectMessage, clientSocket);
     std::cout << "Client disconnected: " << username << std::endl;
 
-    // Remove client from list
     removeClient(clientSocket);
     closesocket(clientSocket);
 }
 
+void signalHandler(int signal) {
+    if (signal == SIGINT) {
+        running = false;
+    }
+}
+
 int main() {
+    signal(SIGINT, signalHandler);
     WSADATA wsaData;
     int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != 0) {
@@ -103,7 +120,7 @@ int main() {
 
     std::cout << "Server listening on port " << PORT << std::endl;
 
-    while (true) {
+    while (running) {
         sockaddr_in clientAddr;
         int addrlen = sizeof(clientAddr);
         SOCKET clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &addrlen);
@@ -115,7 +132,12 @@ int main() {
         clientThread.detach();
     }
 
+    for (const auto& client : clients) {
+        closesocket(client.socket);
+    }
+
     closesocket(serverSocket);
     WSACleanup();
+    std::cout << "Server shutdown successfully." << std::endl;
     return 0;
 }
