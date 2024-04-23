@@ -75,19 +75,18 @@ int main() {
     std::getline(std::cin, message);  // User types their username first
     send(sock, message.c_str(), message.length(), 0);
 
-    while (std::getline(std::cin, message)) {
-        if (message == "quit") {
-            send(sock, "has left the chat.", 18, 0);
-            break;
-        } else if (message == "clear") {
-            std::cout << "\033[2J\033[1;1H"; // Clear console screen
-        } else {
-            printTimestamp();
-            std::cout << GREEN_TEXT << message << RESET_COLOR << std::endl;
-            send(sock, message.c_str(), message.length(), 0);
-        }
+while (std::getline(std::cin, message)) {
+    if (message == "quit") {
+        send(sock, "has left the chat.", 18, 0);
+        break;
+    } else if (message == "clear") {
+        std::cout << "\033[2J\033[1;1H"; // Clear console screen
+    } else {
+        printTimestamp(); // Add timestamp
+        std::cout << GREEN_TEXT << message << RESET_COLOR << std::endl; // Print the message in green
+        send(sock, message.c_str(), message.length(), 0); // Send the message
     }
-
+}
     close(sock);
     std::cout << GREEN_TEXT << "You have disconnected from the server." << RESET_COLOR << std::endl;
     return 0;
